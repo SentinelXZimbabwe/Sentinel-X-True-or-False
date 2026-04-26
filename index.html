@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sentinel-X: True or False</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #0b1220;
+    color: #e2e8f0;
+    text-align: center;
+    padding: 20px;
+    overflow-x: hidden;
+}
+
+/* LOGO BACKGROUND */
+body::before {
+    content: "";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 650px;
+    height: 650px;
+    background: url("logo.png") no-repeat center;
+    background-size: contain;
+    transform: translate(-50%, -50%);
+    opacity: 0.06;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.container {
+    position: relative;
+    z-index: 2;
+    max-width: 820px;
+    margin: auto;
+    background: rgba(30, 41, 59, 0.88);
+    padding: 20px;
+    border-radius: 16px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 40px rgba(0,0,0,0.6);
+}
+
+h1 { color:#38bdf8; margin:0; }
+
+input {
+    padding: 8px;
+    width: 130px;
+    margin: 6px;
+    border-radius: 6px;
+    border: none;
+}
+
+button {
+    padding: 10px 16px;
+    margin: 6px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover { transform: scale(1.05); }
+
+.true { background:#22c55e; color:white; }
+.false { background:#ef4444; color:white; }
+.start { background:#3b82f6; color:white; }
+
+.quit { background:#f97316; color:white; }
+.restart { background:#22c55e; color:white; }
+.menu { background:#0ea5e9; color:white; }
+
+.question { font-size:22px; margin:15px; }
+.timer, .round { color:#fbbf24; }
+.score { margin-top:10px; }
+
+/* POPUP */
+.popup {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 90px;
+    opacity: 0;
+    transition: 0.3s;
+    z-index: 999;
+}
+
+.popup.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.3);
+}
+
+/* CONFETTI */
+.confetti {
+    position: fixed;
+    width: 8px;
+    height: 8px;
+    top: -10px;
+    animation: fall linear forwards;
+}
+
+@keyframes fall {
+    to {
+        transform: translateY(110vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div style="display:flex; flex-direction:column; align-items:center;">
+    <img src="logo.png" style="width:120px;">
+    <h1>Sentinel-X</h1>
+    <p style="opacity:0.7;">True or False Intelligence System</p>
+</div>
+
+<!-- SETUP -->
+<div id="setup">
+    <p>Game Setup</p>
+
+    Questions:
+    <input type="number" id="qCount" min="1" max="150" value="10">
+
+    Time/Q (7–15s):
+    <input type="number" id="tLimit" min="7" max="15" value="10">
+
+    Round Time (min):
+    <input type="number" id="roundTime" min="1" max="60" value="2">
+
+    <br>
+    <button class="start" onclick="startGame()">Start Game</button>
+</div>
+
+<!-- GAME -->
+<div id="game" style="display:none;">
+
+    <div class="round" id="roundTimer"></div>
+    <div class="timer" id="timer"></div>
+
+    <div class="question" id="question"></div>
+    <div id="qIndex"></div>
+
+    <button class="true" onclick="answer(true)">True</button>
+    <button class="false" onclick="answer(false)">False</button>
+
+    <br>
+
+    <button class="quit" onclick="quitGame()">Quit</button>
+
+    <div class="score" id="score">Score: 0</div>
+</div>
+
+<!-- END -->
+<div id="end" style="display:none;">
+    <h2>Round Complete</h2>
+
+    <div id="finalScore"></div>
+
+    <button class="restart" onclick="restartRound()">Restart Round</button>
+    <button class="menu" onclick="mainMenu()">Main Menu</button>
+</div>
+
+<div id="popup" class="popup"></div>
+
+</div>
+
+<script>
+
+/* =========================
+   QUESTION BANK
+========================= */
+
+const baseBank = [
+{q:"The Earth has 7 continents.", a:true},
+{q:"Water boils at 100°C at sea level.", a:true},
+{q:"The capital of Japan is Tokyo.", a:true},
+{q:"The sun is a planet.", a:false},
+{q:"Humans have 206 bones in adulthood.", a:true},
+{q:"Lightning never strikes the same place twice.", a:false},
+{q:"Africa is the second largest continent.", a:true},
+{q:"Gold is lighter than silver.", a:false},
+{q:"Mount Everest is the tallest mountain on Earth.", a:true},
+{q:"Venus is the closest planet to the sun.", a:false},
+
+{q:"The Pacific Ocean is the largest ocean.", a:true},
+{q:"The Nile is the longest river in the world.", a:true},
+{q:"Bananas grow on trees.", a:false},
+{q:"Sharks are mammals.", a:false},
+{q:"The human heart has four chambers.", a:true},
+{q:"Sound travels faster than light.", a:false},
+{q:"The Earth is flat.", a:false},
+{q:"Mercury is the smallest planet in the solar system.", a:true},
+{q:"Mars is known as the Red Planet.", a:true},
+{q:"Water freezes at 0°C.", a:true},
+
+{q:"The Great Wall of China is visible from space with the naked eye.", a:false},
+{q:"The Amazon rainforest is in South America.", a:true},
+{q:"Oxygen is essential for fire.", a:true},
+{q:"Humans only use 10% of their brains.", a:false},
+{q:"Diamonds are made of carbon.", a:true},
+{q:"The speed of light is faster than sound.", a:true},
+{q:"Dogs are reptiles.", a:false},
+{q:"China has the largest population in the world.", a:true},
+{q:"The Eiffel Tower is in Paris.", a:true},
+{q:"The Sahara is the largest desert in the world.", a:true},
+
+{q:"The moon produces its own light.", a:false},
+{q:"The Earth orbits the sun.", a:true},
+{q:"Jupiter is the largest planet.", a:true},
+{q:"Fish can live permanently out of water.", a:false},
+{q:"The human body is mostly water.", a:true},
+{q:"A year has 365 days.", a:true},
+{q:"The Milky Way is a galaxy.", a:true},
+{q:"Electricity travels at the speed of light.", a:true},
+{q:"Penguins can fly.", a:false},
+{q:"Australia is both a country and a continent.", a:true},
+
+{q:"The capital of the USA is New York.", a:false},
+{q:"Berlin is the capital of Germany.", a:true},
+{q:"Water boils at 90°C at sea level.", a:false},
+{q:"The sun is a star.", a:true},
+{q:"Ice is heavier than water.", a:false},
+{q:"Humans breathe oxygen.", a:true},
+{q:"Venus has no moons.", a:true},
+{q:"Mars has two moons.", a:true},
+{q:"The Earth has one moon.", a:true},
+{q:"The Atlantic Ocean is larger than the Pacific.", a:false},
+
+{q:"Mount Kilimanjaro is in Africa.", a:true},
+{q:"The Congo River is in Asia.", a:false},
+{q:"Iron is heavier than aluminum.", a:true},
+{q:"Sound cannot travel in space.", a:true},
+{q:"The human skeleton regenerates over time.", a:true},
+{q:"Pluto is classified as a dwarf planet.", a:true},
+{q:"The Earth rotates once every 24 hours.", a:true},
+{q:"Lightning is hotter than the sun's surface.", a:true},
+{q:"The human eye can see infrared light naturally.", a:false},
+{q:"Camels store water in their humps.", a:false},
+
+{q:"The largest bone in the human body is the femur.", a:true},
+{q:"All insects have six legs.", a:true},
+{q:"Whales are fish.", a:false},
+{q:"Octopuses have three hearts.", a:true},
+{q:"A group of lions is called a pride.", a:true},
+{q:"Cows can climb trees.", a:false},
+{q:"The fastest land animal is the cheetah.", a:true},
+{q:"Elephants are the largest land animals.", a:true},
+{q:"Bats are mammals.", a:true},
+{q:"Snakes are amphibians.", a:false},
+
+{q:"The boiling point of water decreases at higher altitudes.", a:true},
+{q:"The human brain stops growing after childhood.", a:true},
+{q:"Plants produce oxygen through photosynthesis.", a:true},
+{q:"The sun rises in the west.", a:false},
+{q:"Venus is hotter than Mercury.", a:true},
+{q:"The Earth is the center of the solar system.", a:false},
+{q:"Gravity exists on the moon.", a:true},
+{q:"The Titanic sank in 1912.", a:true},
+{q:"World War II ended in 1945.", a:true},
+{q:"The first man on the moon was Neil Armstrong.", a:true},
+
+{q:"The internet was invented in the 1800s.", a:false},
+{q:"Computers use binary language.", a:true},
+{q:"A smartphone is a type of computer.", a:true},
+{q:"Wi-Fi uses radio waves.", a:true},
+{q:"The first computer was the size of a laptop.", a:false},
+{q:"Artificial intelligence can learn patterns.", a:true},
+{q:"HTML is a programming language.", a:false},
+{q:"JavaScript runs in browsers.", a:true},
+{q:"Python is a snake and a programming language.", a:true},
+{q:"RAM is permanent storage.", a:false},
+
+{q:"Hard drives store data permanently.", a:true},
+{q:"Cloud storage is physical hardware only.", a:false},
+{q:"GPS stands for Global Positioning System.", a:true},
+{q:"Bluetooth uses wired connections.", a:false},
+{q:"A gigabyte is larger than a megabyte.", a:true},
+{q:"The keyboard is an input device.", a:true},
+{q:"A printer is an input device.", a:false},
+{q:"Monitors display output.", a:true},
+{q:"The CPU is the brain of the computer.", a:true},
+{q:"Software is physical hardware.", a:false},
+
+{q:"The Roman Empire existed before the Egyptian civilization.", a:false},
+{q:"The pyramids are in Egypt.", a:true},
+{q:"The Colosseum is in Rome.", a:true},
+{q:"The United Nations was founded in 1945.", a:true},
+{q:"Africa has 54 countries.", a:true},
+{q:"South Africa has three capital cities.", a:true},
+{q:"Zimbabwe is landlocked.", a:true},
+{q:"The capital of Zimbabwe is Bulawayo.", a:false},
+{q:"Harare is the capital of Zimbabwe.", a:true},
+{q:"The Zambezi River forms Victoria Falls.", a:true},
+
+{q:"The Eiffel Tower is made of steel.", a:true},
+{q:"Gold is magnetic.", a:false},
+{q:"Silver is more expensive than gold.", a:false},
+{q:"The human body has more than 600 muscles.", a:true},
+{q:"The brain is the heaviest organ.", a:false},
+{q:"Skin is the largest organ in the body.", a:true},
+{q:"The liver can regenerate itself.", a:true},
+{q:"Blood is blue inside the body.", a:false},
+{q:"Humans share 98% DNA with chimpanzees.", a:true},
+{q:"All planets in the solar system have moons.", a:false},
+
+{q:"Saturn has rings.", a:true},
+{q:"Neptune is the farthest planet from the sun.", a:true},
+{q:"Uranus rotates on its side.", a:true},
+{q:"Mercury has an atmosphere like Earth.", a:false},
+{q:"The sun will eventually become a red giant.", a:true},
+{q:"Black holes can be seen directly.", a:false},
+{q:"Light cannot escape black holes.", a:true},
+{q:"Space is completely empty.", a:false},
+{q:"Astronauts float due to zero gravity.", a:false},
+{q:"The ISS orbits Earth.", a:true},
+
+{q:"One hour has 3600 seconds.", a:true},
+{q:"A triangle has 4 sides.", a:false},
+{q:"A circle has no edges.", a:true},
+{q:"Pi is approximately 3.14.", a:true},
+{q:"A square has equal sides.", a:true},
+{q:"A cube has 6 faces.", a:true},
+{q:"Water is a solid at room temperature.", a:false},
+{q:"Air is made of gases.", a:true},
+{q:"Helium is lighter than air.", a:true},
+{q:"Carbon dioxide is toxic in small amounts.", a:false},
+
+{q:"The Earth is older than 4 billion years.", a:true},
+{q:"Dinosaurs and humans coexisted.", a:false},
+{q:"Fossils are preserved remains of ancient life.", a:true},
+{q:"Coal is a renewable energy source.", a:false},
+{q:"Solar energy comes from the sun.", a:true},
+{q:"Wind turbines generate electricity.", a:true},
+{q:"Oil is a renewable resource.", a:false},
+{q:"Plastic is biodegradable.", a:false},
+{q:"Recycling helps reduce waste.", a:true},
+{q:"Trees absorb carbon dioxide.", a:true},
+{q:"Earth has 7 continents.", a:true},
+{q:"Water boils at 100°C.", a:true},
+{q:"Sun is a planet.", a:false},
+{q:"Humans have 206 bones.", a:true},
+{q:"Lightning never strikes twice.", a:false},
+{q:"Africa is second largest continent.", a:true},
+{q:"Gold is heavier than silver.", a:true},
+{q:"Great Wall visible from space easily.", a:false},
+{q:"Everest is tallest mountain.", a:true},
+{q:"Venus is closest to sun.", a:false},
+{q:"Heart has 4 chambers.", a:true},
+{q:"Sharks are mammals.", a:false},
+{q:"Nile is in Africa.", a:true},
+{q:"Sound faster than light.", a:false},
+{q:"24 hours in a day.", a:true},
+{q:"Amazon in Asia.", a:false},
+{q:"Diamond is carbon.", a:true},
+{q:"US currency is Dollar.", a:true},
+{q:"Moon produces light.", a:false},
+{q:"Bananas grow on trees.", a:false},
+{q:"Pacific largest ocean.", a:true},
+{q:"Water freezes at 0°C.", a:true},
+{q:"Dogs are reptiles.", a:false},
+{q:"Body mostly water.", a:true},
+{q:"China largest population.", a:true},
+{q:"Eiffel Tower in Berlin.", a:false},
+{q:"Mars is red planet.", a:true},
+{q:"10% brain usage myth.", a:false},
+{q:"Oxygen needed for fire.", a:true},
+{q:"Light faster than sound.", a:true},
+{q:"Year has 300 days.", a:false},
+{q:"Penguins can fly.", a:false},
+{q:"Australia is continent.", a:true},
+{q:"Fish live on land.", a:false},
+{q:"Milky Way is galaxy.", a:true},
+{q:"Electricity is fast.", a:true},
+{q:"Mercury hottest planet.", a:false},
+{q:"Ice heavier than water.", a:false},
+{q:"Sahara is desert.", a:true},
+{q:"Wolves are pets.", a:false},
+{q:"Blood is red.", a:true},
+{q:"Plants produce oxygen.", a:true},
+{q:"Moon bigger than Earth.", a:false},
+{q:"Sound faster in water.", a:true},
+{q:"Venus has no moons.", a:true},
+{q:"Earth is flat.", a:false},
+{q:"Atoms are smallest units.", a:true},
+
+{q:"The Earth’s core is made mostly of iron.", a:true},
+{q:"The Sahara Desert is the coldest place on Earth.", a:false},
+{q:"Rainbows are formed by reflection and refraction of light.", a:true},
+{q:"The human body has 5 senses only.", a:false},
+{q:"A dolphin is a fish.", a:false},
+{q:"An octopus has 8 arms.", a:true},
+{q:"The longest bone in the human body is the femur.", a:true},
+{q:"Humans can survive without water for weeks.", a:false},
+{q:"The heart pumps blood through the body.", a:true},
+{q:"The sun is made of gas.", a:true},
+
+{q:"The Earth is the largest planet in the solar system.", a:false},
+{q:"Jupiter has a Great Red Spot storm.", a:true},
+{q:"Mercury has no atmosphere.", a:true},
+{q:"Saturn is less dense than water.", a:true},
+{q:"Neptune is closer to the sun than Uranus.", a:false},
+{q:"The moon causes tides on Earth.", a:true},
+{q:"The Earth spins clockwise when viewed from the North Pole.", a:false},
+{q:"The Amazon River flows through Africa.", a:false},
+{q:"The Andes are the longest mountain range.", a:true},
+{q:"Mount Everest grows every year.", a:true},
+
+{q:"Humans have more than 2000 taste buds.", a:true},
+{q:"The brain stops developing at age 10.", a:false},
+{q:"Skin replaces itself over time.", a:true},
+{q:"The liver helps detoxify the body.", a:true},
+{q:"The stomach produces acid.", a:true},
+{q:"Bones are completely solid.", a:false},
+{q:"Blood is pumped by lungs.", a:false},
+{q:"The lungs exchange oxygen and carbon dioxide.", a:true},
+{q:"The human body has more bacteria than cells.", a:true},
+{q:"DNA stands for Digital Network Access.", a:false},
+
+{q:"A virus is a living organism.", a:false},
+{q:"Bacteria can be both harmful and helpful.", a:true},
+{q:"Antibiotics kill viruses.", a:false},
+{q:"Vaccines help prevent diseases.", a:true},
+{q:"Malaria is caused by a virus.", a:false},
+{q:"Mosquitoes transmit malaria.", a:true},
+{q:"The flu is caused by bacteria.", a:false},
+{q:"Fungi include mushrooms.", a:true},
+{q:"Plants do not breathe.", a:false},
+{q:"Photosynthesis requires sunlight.", a:true},
+
+{q:"All planets orbit in perfect circles.", a:false},
+{q:"The Milky Way contains billions of stars.", a:true},
+{q:"Black holes emit light.", a:false},
+{q:"Space has no sound.", a:true},
+{q:"Astronauts experience weightlessness in orbit.", a:true},
+{q:"The ISS is permanently on Earth.", a:false},
+{q:"The moon has gravity.", a:true},
+{q:"Mars has ice caps.", a:true},
+{q:"Venus rotates backwards compared to Earth.", a:true},
+{q:"Earth is the hottest planet.", a:false},
+
+{q:"The largest ocean is the Atlantic Ocean.", a:false},
+{q:"The Pacific Ocean covers more than Earth’s surface.", a:false},
+{q:"Water is H2O.", a:true},
+{q:"Saltwater freezes faster than freshwater.", a:false},
+{q:"Oceans contain salt.", a:true},
+{q:"Ice floats on water.", a:true},
+{q:"Steam is liquid water.", a:false},
+{q:"Evaporation turns liquid into gas.", a:true},
+{q:"Condensation turns gas into liquid.", a:true},
+{q:"Rain is part of the water cycle.", a:true},
+
+{q:"The Eiffel Tower was built in 1889.", a:true},
+{q:"The Roman Empire started in Africa.", a:false},
+{q:"The Great Pyramid is one of the Seven Wonders.", a:true},
+{q:"The first world war ended in 1918.", a:true},
+{q:"The United States gained independence in 1776.", a:true},
+{q:"South Africa is the only African country with 1 capital.", a:false},
+{q:"Nigeria is the most populous African country.", a:true},
+{q:"Africa is a country.", a:false},
+{q:"Zimbabwe is in Southern Africa.", a:true},
+{q:"Harare is the capital of Zimbabwe.", a:true},
+
+{q:"Bulawayo is the capital of Zimbabwe.", a:false},
+{q:"The Zambezi River flows into the Indian Ocean.", a:true},
+{q:"Victoria Falls is one of the largest waterfalls.", a:true},
+{q:"The Sahara is in Asia.", a:false},
+{q:"Egypt is partly in Africa.", a:true},
+{q:"Kenya is on the equator.", a:true},
+{q:"South Africa is the southernmost country in Africa.", a:true},
+{q:"The Congo is a desert.", a:false},
+{q:"Madagascar is an island.", a:true},
+{q:"Ethiopia has no coastline.", a:true},
+
+{q:"JavaScript is a type of coffee.", a:false},
+{q:"HTML structures web pages.", a:true},
+{q:"CSS is used for styling websites.", a:true},
+{q:"Python is only used for snakes.", a:false},
+{q:"AI can learn from data.", a:true},
+{q:"A database stores information.", a:true},
+{q:"Cloud computing requires physical servers only.", a:false},
+{q:"Wi-Fi is wireless internet.", a:true},
+{q:"5G is slower than 4G.", a:false},
+{q:"A computer virus is biological.", a:false},
+
+{q:"RAM stores data permanently.", a:false},
+{q:"SSD is faster than HDD.", a:true},
+{q:"The CPU executes instructions.", a:true},
+{q:"A keyboard is an output device.", a:false},
+{q:"A mouse is an input device.", a:true},
+{q:"Monitors display visual output.", a:true},
+{q:"Printers are input devices.", a:false},
+{q:"The internet is a global network.", a:true},
+{q:"Email was invented before computers.", a:false},
+{q:"Bluetooth uses short-range wireless signals.", a:true},
+
+{q:"Gravity exists in space.", a:true},
+{q:"The sun is a black hole.", a:false},
+{q:"Stars produce light and heat.", a:true},
+{q:"Comets are made of ice and dust.", a:true},
+{q:"Asteroids are larger than planets.", a:false},
+{q:"The moon has no atmosphere.", a:true},
+{q:"Earth has one natural satellite.", a:true},
+{q:"The sun rises in the west.", a:false},
+{q:"A day is 24 hours long.", a:true},
+{q:"A week has 8 days.", a:false},
+
+{q:"Gold is a chemical element.", a:true},
+{q:"Oxygen is a metal.", a:false},
+{q:"Helium is a gas.", a:true},
+{q:"Iron rusts when exposed to water and oxygen.", a:true},
+{q:"Water is flammable.", a:false},
+{q:"Glass is a liquid at room temperature.", a:false},
+{q:"Diamond is the hardest natural material.", a:true},
+{q:"Salt dissolves in water.", a:true},
+{q:"Oil and water mix easily.", a:false},
+{q:"Temperature is measured in Celsius or Fahrenheit.", a:true},
+
+{q:"The human skeleton has over 300 bones.", a:false},
+{q:"Adults have fewer bones than babies.", a:true},
+{q:"The smallest bone is in the ear.", a:true},
+{q:"The brain controls the nervous system.", a:true},
+{q:"Muscles help movement.", a:true},
+{q:"The skin is waterproof.", a:true},
+{q:"Hair is made of keratin.", a:true},
+{q:"Fingernails grow continuously.", a:true},
+{q:"The eye can see all wavelengths of light.", a:false},
+{q:"The tongue helps with speech and taste.", a:true},
+
+{q:"The speed of light is approximately 300,000 km/s.", a:true},
+{q:"Sound travels faster in air than in steel.", a:false},
+{q:"Water is made of hydrogen and oxygen.", a:true},
+{q:"Helium is a liquid at room temperature.", a:false},
+{q:"The Earth has a molten core.", a:true},
+{q:"The crust is the thickest layer of Earth.", a:false},
+{q:"Volcanoes can form new land.", a:true},
+{q:"Earthquakes are caused by ocean waves.", a:false},
+{q:"The Richter scale measures earthquakes.", a:true},
+{q:"Tsunamis are caused by underwater disturbances.", a:true},
+
+{q:"Deserts always have hot temperatures.", a:false},
+{q:"Antarctica is a desert.", a:true},
+{q:"Rainforests are dry environments.", a:false},
+{q:"Trees produce oxygen.", a:true},
+{q:"Leaves absorb carbon dioxide.", a:true},
+{q:"Plants need sunlight to grow.", a:true},
+{q:"All plants have flowers.", a:false},
+{q:"Cacti store water.", a:true},
+{q:"Fruits contain seeds.", a:true},
+{q:"Vegetables are always green.", a:false},
+
+{q:"Birds are reptiles.", a:false},
+{q:"Fish breathe using gills.", a:true},
+{q:"All snakes are venomous.", a:false},
+{q:"Lions live in groups called prides.", a:true},
+{q:"Cheetahs are the fastest land animals.", a:true},
+{q:"Elephants cannot swim.", a:false},
+{q:"Dolphins are mammals.", a:true},
+{q:"Whales breathe air.", a:true},
+{q:"Sharks are fish.", a:true},
+{q:"Bats are birds.", a:false},
+
+{q:"The human body has 5 liters of blood.", a:false},
+{q:"The brain uses about 20% of oxygen intake.", a:true},
+{q:"The liver is part of the digestive system.", a:true},
+{q:"The kidneys filter blood.", a:true},
+{q:"The stomach digests food.", a:true},
+{q:"The skin is the largest organ.", a:true},
+{q:"Teeth are bones.", a:false},
+{q:"The tongue has taste buds.", a:true},
+{q:"The eye is the most complex organ.", a:true},
+{q:"Humans have more than 10 senses.", a:false},
+
+{q:"Water is essential for life.", a:true},
+{q:"Humans can survive without food for months.", a:false},
+{q:"Dehydration can be dangerous.", a:true},
+{q:"Sugar is a carbohydrate.", a:true},
+{q:"Fats are not needed by the body.", a:false},
+{q:"Proteins help build muscles.", a:true},
+{q:"Vitamins are micronutrients.", a:true},
+{q:"Salt is toxic in small amounts.", a:false},
+{q:"Too much sugar is unhealthy.", a:true},
+{q:"Fiber helps digestion.", a:true},
+
+{q:"The sun is 1 million kilometers away.", a:false},
+{q:"The sun is about 150 million km from Earth.", a:true},
+{q:"The moon is a planet.", a:false},
+{q:"Earth is the third planet from the sun.", a:true},
+{q:"Mars has a thicker atmosphere than Earth.", a:false},
+{q:"Jupiter has many moons.", a:true},
+{q:"Saturn has rings made of ice and rock.", a:true},
+{q:"Uranus is the hottest planet.", a:false},
+{q:"Neptune has strong winds.", a:true},
+{q:"Pluto is still a full planet.", a:false},
+
+{q:"Light is a form of energy.", a:true},
+{q:"Electricity is always visible.", a:false},
+{q:"Magnets attract all metals.", a:false},
+{q:"Iron is magnetic.", a:true},
+{q:"Water conducts electricity well.", a:true},
+{q:"Plastic is a conductor.", a:false},
+{q:"Glass is transparent.", a:true},
+{q:"Wood floats on water.", a:true},
+{q:"Stone always floats.", a:false},
+{q:"Oil is lighter than water.", a:true},
+
+{q:"The Industrial Revolution started in Africa.", a:false},
+{q:"The wheel was invented in ancient times.", a:true},
+{q:"Paper was invented in China.", a:true},
+{q:"Electricity was discovered by Newton.", a:false},
+{q:"Albert Einstein developed relativity.", a:true},
+{q:"Isaac Newton discovered gravity.", a:true},
+{q:"Thomas Edison invented the light bulb.", a:true},
+{q:"The first computer was modern smartphone-sized.", a:false},
+{q:"The internet was created in the 1960s.", a:true},
+{q:"Google was founded in the 1800s.", a:false},
+
+{q:"Africa is the smallest continent.", a:false},
+{q:"Asia is the largest continent.", a:true},
+{q:"Europe is a country.", a:false},
+{q:"Nigeria is in Africa.", a:true},
+{q:"Egypt is in Europe.", a:false},
+{q:"South America is home to the Amazon.", a:true},
+{q:"Canada is in Africa.", a:false},
+{q:"Russia is the largest country.", a:true},
+{q:"Brazil is in South America.", a:true},
+{q:"Japan is an island country.", a:true},
+
+{q:"The human skeleton protects organs.", a:true},
+{q:"Muscles push bones.", a:false},
+{q:"The heart is a muscle.", a:true},
+{q:"Blood carries oxygen.", a:true},
+{q:"White blood cells fight infections.", a:true},
+{q:"Red blood cells carry oxygen.", a:true},
+{q:"Platelets help clot blood.", a:true},
+{q:"The lungs are part of the digestive system.", a:false},
+{q:"Breathing is involuntary.", a:true},
+{q:"Heartbeat is controlled consciously.", a:false},
+
+{q:"The Earth has seasons due to tilt.", a:true},
+{q:"All countries experience snow.", a:false},
+{q:"The equator is the hottest region.", a:true},
+{q:"Polar regions are warm.", a:false},
+{q:"Rain forms from clouds.", a:true},
+{q:"Clouds are made of smoke.", a:false},
+{q:"Thunder comes before lightning.", a:false},
+{q:"Lightning is electricity in the sky.", a:true},
+{q:"Storms can form over oceans.", a:true},
+{q:"Wind is moving air.", a:true},
+
+{q:"A triangle has three sides.", a:true},
+{q:"A square has five sides.", a:false},
+{q:"A circle has no corners.", a:true},
+{q:"Pi is exactly 3.", a:false},
+{q:"Math is used in engineering.", a:true},
+{q:"Algebra uses symbols.", a:true},
+{q:"Geometry studies shapes.", a:true},
+{q:"Addition is subtraction.", a:false},
+{q:"Multiplication is repeated addition.", a:true},
+{q:"Division increases numbers.", a:false},
+
+{q:"Time travel is currently possible.", a:false},
+{q:"Black holes can bend light.", a:true},
+{q:"Space has gravity.", a:true},
+{q:"The universe is expanding.", a:true},
+{q:"There is sound in space.", a:false},
+{q:"Stars are made of gas.", a:true},
+{q:"The sun is a dwarf star.", a:false},
+{q:"Galaxies contain billions of stars.", a:true},
+{q:"The Milky Way is our solar system.", a:false},
+{q:"Earth is one of many planets in the galaxy.", a:true},
+
+{q:"Coding requires logic.", a:true},
+{q:"HTML is used for structure.", a:true},
+{q:"CSS is used for logic.", a:false},
+{q:"JavaScript runs only on servers.", a:false},
+{q:"Databases store data.", a:true},
+{q:"AI cannot learn.", a:false},
+{q:"Machine learning is a subset of AI.", a:true},
+{q:"Robots always look like humans.", a:false},
+{q:"Automation replaces manual tasks.", a:true},
+{q:"Cybersecurity protects systems.", a:true}
+
+];
+
+let bank=[];
+while(bank.length<150){
+    bank.push(...baseBank);
+}
+bank=bank.slice(0,150);
+
+/* =========================
+   STATE
+========================= */
+
+let questions=[];
+let index=0;
+let score=0;
+
+let qTimer;
+let roundTimer;
+
+let qTimeLeft;
+let roundTimeLeft;
+
+let timeLimit;
+let gameActive=true;
+
+/* =========================
+   SHUFFLE
+========================= */
+
+function shuffle(a){
+    for(let i=a.length-1;i>0;i--){
+        let j=Math.floor(Math.random()*(i+1));
+        [a[i],a[j]]=[a[j],a[i]];
+    }
+}
+
+/* =========================
+   START
+========================= */
+
+function startGame(){
+
+    let count=parseInt(document.getElementById("qCount").value);
+    timeLimit=parseInt(document.getElementById("tLimit").value);
+    let roundMin=parseInt(document.getElementById("roundTime").value);
+
+    questions=[...bank];
+    shuffle(questions);
+    questions=questions.slice(0,count);
+
+    index=0;
+    score=0;
+    gameActive=true;
+
+    roundTimeLeft=roundMin*60;
+
+    clearInterval(roundTimer);
+
+    roundTimer=setInterval(()=>{
+        if(!gameActive) return;
+        roundTimeLeft--;
+        document.getElementById("roundTimer").innerText =
+            "Round Time Left: " + roundTimeLeft + "s";
+        if(roundTimeLeft<=0) endGame();
+    },1000);
+
+    document.getElementById("setup").style.display="none";
+    document.getElementById("game").style.display="block";
+    document.getElementById("end").style.display="none";
+
+    loadQ();
+}
+
+/* =========================
+   LOAD QUESTION
+========================= */
+
+function loadQ(){
+
+    if(!gameActive) return;
+
+    if(index>=questions.length){
+        endGame();
+        return;
+    }
+
+    document.getElementById("question").innerText = questions[index].q;
+    document.getElementById("qIndex").innerText =
+        `Question ${index+1} / ${questions.length}`;
+
+    qTimeLeft=timeLimit;
+
+    clearInterval(qTimer);
+
+    qTimer=setInterval(()=>{
+        if(!gameActive) return;
+
+        qTimeLeft--;
+        document.getElementById("timer").innerText="Time: "+qTimeLeft+"s";
+
+        if(qTimeLeft<=0){
+            clearInterval(qTimer);
+            nextQuestion();
+        }
+    },1000);
+}
+
+/* =========================
+   ANSWER (FIXED AUTO-NEXT)
+========================= */
+
+function answer(val){
+
+    if(!gameActive) return;
+
+    clearInterval(qTimer);
+
+    let correct = questions[index].a === val;
+
+    if(correct){
+        score += 5;
+        document.getElementById("score").innerText="Score: "+score;
+        popup("😄",true);
+        confetti();
+    } else {
+        popup("😢",false);
+    }
+
+    // ALWAYS MOVE NEXT (TRUE OR FALSE)
+    setTimeout(()=>{
+        nextQuestion();
+    },350);
+}
+
+/* =========================
+   NEXT QUESTION
+========================= */
+
+function nextQuestion(){
+    index++;
+    loadQ();
+}
+
+/* =========================
+   QUIT
+========================= */
+
+function quitGame(){
+    gameActive=false;
+    clearInterval(qTimer);
+    clearInterval(roundTimer);
+    showEnd("Game Quit");
+}
+
+/* =========================
+   END
+========================= */
+
+function endGame(){
+    gameActive=false;
+    clearInterval(qTimer);
+    clearInterval(roundTimer);
+    showEnd("Round Complete");
+}
+
+function showEnd(title){
+
+    document.getElementById("game").style.display="none";
+    document.getElementById("end").style.display="block";
+
+    document.getElementById("finalScore").innerHTML =
+        `<h2>${title}</h2>
+         Final Score: <b>${score}</b> / ${questions.length*5}`;
+}
+
+/* =========================
+   MENU CONTROLS
+========================= */
+
+function restartRound(){
+    startGame();
+}
+
+function mainMenu(){
+    document.getElementById("setup").style.display="block";
+    document.getElementById("game").style.display="none";
+    document.getElementById("end").style.display="none";
+}
+
+/* =========================
+   POPUP
+========================= */
+
+function popup(icon,good){
+    let p=document.getElementById("popup");
+    p.innerText=icon;
+    p.style.color=good?"#22c55e":"#ef4444";
+    p.classList.add("show");
+    setTimeout(()=>p.classList.remove("show"),600);
+}
+
+/* =========================
+   CONFETTI
+========================= */
+
+function confetti(){
+    for(let i=0;i<20;i++){
+        let c=document.createElement("div");
+        c.className="confetti";
+        c.style.left=Math.random()*100+"vw";
+        c.style.background=["#22c55e","#3b82f6","#fbbf24","#ef4444"][Math.floor(Math.random()*4)];
+        c.style.animationDuration=(Math.random()*2+1)+"s";
+        document.body.appendChild(c);
+        setTimeout(()=>c.remove(),3000);
+    }
+}
+
+</script>
+
+</body>
+</html>
